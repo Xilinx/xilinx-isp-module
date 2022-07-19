@@ -458,7 +458,7 @@ static int xdmsc_probe(struct platform_device *pdev)
 		goto v4l2_subdev_error;
 	}
 	dev_info(&pdev->dev,
-		 "Xilinx Video Demosaic Probe Successful");
+		 "Xilinx ISP Driver Probe Successful");
 	return 0;
 
 v4l2_subdev_error:
