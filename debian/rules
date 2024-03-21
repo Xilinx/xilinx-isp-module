@@ -1,0 +1,23 @@
+#!/usr/bin/make -f
+#  SPDX-License-Identifier: GPL-2+
+#  Copyright (C) 2020 - 2022, Xilinx, Inc.
+#  Copyright (C) 2022 - 2024, Advanced Micro Devices, Inc.
+
+include /usr/share/dpkg/default.mk
+
+DEB_BUILD_ARCH := $(shell dpkg-architecture -qDEB_BUILD_ARCH)
+DEBVERS := $(shell dpkg-parsechangelog | grep ^Version: | cut -d' ' -f2 | cut -d- -f1)
+VERSION := $(shell echo '$(DEBVERS)' | sed -e 's/[+-].*//' -e 's/~//g')
+
+override_dh_dkms:
+	dh_dkms -V $(VERSION)
+
+%:
+	dh $@ --with dkms
+
+SRC_DIR := $(CURDIR)/debian/xilinx-isp-module/usr/src/xilinx-isp-module-$(VERSION)
+
+override_dh_auto_install:
+	install -d $(SRC_DIR)
+	cp -a src/* $(SRC_DIR)
+	dh_auto_install
