@@ -1,0 +1,10 @@
+#  SPDX-License-Identifier: GPL-2+
+#  Copyright (C) 2020 - 2022, Xilinx, Inc.
+#  Copyright (C) 2022 - 2024, Advanced Micro Devices, Inc.
+
+PACKAGE_NAME="xilinx-isp-module"
+PACKAGE_VERSION="0.1"
+AUTOINSTALL="yes"
+BUILT_MODULE_NAME[0]="xilinx-isppipeline"
+BUILT_MODULE_LOCATION[0]="."
+DEST_MODULE_LOCATION[0]="/updates/xilinx-isppipeline/"

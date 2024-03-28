@@ -1,0 +1,19 @@
+#  SPDX-License-Identifier: GPL-2+
+#  Copyright (C) 2020 - 2022, Xilinx, Inc.
+#  Copyright (C) 2022 - 2024, Advanced Micro Devices, Inc.
+
+Source: xilinx-isp-module
+Section: kernel
+Priority: optional
+Maintainer: Sagar Karmarkar<sagar.karmarkar@amd.com>
+Build-Depends: debhelper-compat (= 13), dkms
+Standards-Version: 4.6.0
+Homepage: https://github.com/Xilinx/xilinx-isp-module
+Rules-Requires-Root: binary-targets
+
+Package: xilinx-isp-module
+Architecture: arm64
+Depends: ${shlibs:Depends}, ${misc:Depends}
+Description: Xilinx ISP Driver
+ This package contains ISP drivers for 'kr260 defect detect' and
+ uses DKMS to automatically build the kernel modules.
