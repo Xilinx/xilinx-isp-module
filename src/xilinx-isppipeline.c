@@ -283,7 +283,8 @@ enum xisp_functions_bypassable_index {
 	XISP_LUT3D_INDEX = 16,
 	XISP_CSC_INDEX = 17,
 	XISP_BAYER_STATS_INDEX = 18,
-	XISP_LUMA_STATS_INDEX = 19
+	XISP_LUMA_STATS_INDEX = 19,
+	XISP_RGB_STATS_INDEX = 20
 };
 
 /*
@@ -1204,6 +1205,11 @@ static int xisp_s_ctrl(struct v4l2_ctrl *ctrl)
 							 XISP_LUMA_STATS_INDEX, ctrl->val);
 		xvip_write(&xisp->xvip, XISP_FUNCS_BYPASS_CONFIG_REG, xisp->module_bypass);
 		break;
+	case V4L2_CID_XILINX_ISP_RGB_STATS_EN:
+		xisp->module_bypass = xisp_module_bypass(xisp->module_bypass,
+							 XISP_RGB_STATS_INDEX, ctrl->val);
+		xvip_write(&xisp->xvip, XISP_FUNCS_BYPASS_CONFIG_REG, xisp->module_bypass);
+		break;
 	default:
 		return -EINVAL;
 	}
@@ -1787,6 +1793,21 @@ static struct v4l2_ctrl_config xisp_ctrls_luma_stats[] = {
 	},
 };
 
+static struct v4l2_ctrl_config xisp_ctrls_rgb_stats[] = {
+	/* RGB STATS ENABLE/DISABLE */
+	{
+		.ops = &xisp_ctrl_ops,
+		.id = V4L2_CID_XILINX_ISP_RGB_STATS_EN,
+		.name = "bypass_rgb_stats",
+		.type = V4L2_CTRL_TYPE_BOOLEAN,
+		.min = XISP_MIN_VALUE,
+		.max = 1,
+		.step = 1,
+		.def = 0,
+		.flags = V4L2_CTRL_FLAG_SLIDER,
+	},
+};
+
 static struct v4l2_ctrl_config xisp_ctrls[] = {
 	/* Red Gain*/
 	{
@@ -2351,6 +2372,7 @@ static int xisp_probe(struct platform_device *pdev)
 		num_of_parameters += ARRAY_SIZE(xisp_ctrls_csc);
 		num_of_parameters += ARRAY_SIZE(xisp_ctrls_bayer_stats);
 		num_of_parameters += ARRAY_SIZE(xisp_ctrls_luma_stats);
+		num_of_parameters += ARRAY_SIZE(xisp_ctrls_rgb_stats);
 
 		v4l2_ctrl_handler_init(&xisp->ctrl_handler, num_of_parameters);
 
@@ -2447,6 +2469,8 @@ static int xisp_probe(struct platform_device *pdev)
 				     xisp_ctrls_bayer_stats, ARRAY_SIZE(xisp_ctrls_bayer_stats));
 		xisp_create_controls(xisp, XISP_LUMA_STATS_INDEX,
 				     xisp_ctrls_luma_stats, ARRAY_SIZE(xisp_ctrls_luma_stats));
+		xisp_create_controls(xisp, XISP_RGB_STATS_INDEX,
+				     xisp_ctrls_rgb_stats, ARRAY_SIZE(xisp_ctrls_rgb_stats));
 	} else {
 		v4l2_ctrl_handler_init(&xisp->ctrl_handler, ARRAY_SIZE(xisp_ctrls) +
 				       ARRAY_SIZE(xisp_ctrls_gamma_correct));
