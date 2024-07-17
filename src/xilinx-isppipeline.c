@@ -99,6 +99,9 @@
  *
  * XISP_LTM_CONFIG_REG
  * 0-15: block_rows, 16-31: block_coloms
+ *
+ * XISP_LUT3D_CONFIG_REG
+ * 0-31: lut3d_dim
  */
 #define XISP_COMMON_CONFIG_REG		(0x10UL)
 #define XISP_PIPELINE_CONFIG_INFO_REG		(0x80UL)
@@ -116,6 +119,8 @@
 #define XISP_RGBIR_CONFIG_BASE			(0x200UL)
 #define XISP_DEGAMMA_CONFIG_BASE		(0x1000UL)
 #define XISP_GAMMA_CONFIG_BASE			(0x2000UL)
+#define XISP_LUT3D_CONFIG_REG			(0x60UL)
+#define XISP_LUT3D_CONFIG_BASE			(0x80000)
 #define XISP_RGBIR_CONFIG_BASE1			(XISP_RGBIR_CONFIG_BASE + 0x20)
 #define XISP_RGBIR_CONFIG_BASE2			(XISP_RGBIR_CONFIG_BASE + 0x40)
 #define XISP_RGBIR_CONFIG_BASE3			(XISP_RGBIR_CONFIG_BASE + 0x60)
@@ -160,6 +165,7 @@
 #define XISP_GAMMA_LUT_LEN		(64)
 #define XISP_MIN_VALUE                       (0)
 #define XISP_MAX_VALUE                       (65535)
+#define XISP_LUT3D_SIZE				(107811UL)
 #define XISP_NO_EXPS				(2)
 #define XISP_NO_OF_PADS			(2)
 #define XISP_1H					(100)
@@ -222,6 +228,8 @@
 #define XISP_GTM_C2_DEFALUT			(128)
 #define XISP_LTM_BLOCK_HEIGHT_DEFALUT		(8)
 #define XISP_LTM_BLOCK_WIDTH_DEFALUT		(8)
+#define XISP_3DLUT_DIM_MAX			(0x80000000UL)
+#define XISP_3DLUT_DIM_DEFALUT			(107811UL)
 #define XISP_MONO_LUMA_GAIN_DEFALUT		(128)
 #define XISP_MONO_GAMMA_MAX			(40)
 #define XISP_MONO_GAMMA_DEFALUT			(20)
@@ -271,7 +279,8 @@ enum xisp_functions_bypassable_index {
 	XISP_TM_INDEX = 12,
 	XISP_TM_TYPE_LSB_INDEX = 13,
 	XISP_TM_TYPE_MSB_INDEX = 14,
-	XISP_GAMMA_INDEX = 15
+	XISP_GAMMA_INDEX = 15,
+	XISP_LUT3D_INDEX = 16
 };
 
 /*
@@ -311,6 +320,7 @@ struct xilinx_isp_feature {
  * @mode_reg: Track if AWB is enabled or not
  * @gtm_c1: Expected gtm c1 value
  * @gtm_c2: Expected gtm c2 value
+ * @lut3d_dim: Expected 3d lut dimension
  * @pawb: Expected threshold
  * @block_rows: Expected number of block rows
  * @block_cols: Expected number of block cols
@@ -322,6 +332,7 @@ struct xilinx_isp_feature {
  * @optical_black_value: Expected optical black value
  * @ccm_select: Expected ccm array values
  * @decompand_select: Expected decompand array values
+ * @lut3d: Expected 3d lut values
  * @red_lut: Pointer to the gamma coefficient as per the Red Gamma control
  * @green_lut: Pointer to the gamma coefficient as per the Green Gamma control
  * @blue_lut: Pointer to the gamma coefficient as per the Blue Gamma control
@@ -352,6 +363,7 @@ struct xisp_dev {
 	u32 black_level;
 	u32 gtm_c1;
 	u32 gtm_c2;
+	u32 lut3d_dim;
 	u32 intersec;
 	u16 npads;
 	u16 width;
@@ -375,6 +387,7 @@ struct xisp_dev {
 	u8 degamma_select;
 	u8 decompand_select;
 	u8 ccm_select;
+	const u32 *lut3d;
 	const u32 *mono_lut;
 	const u32 *red_lut;
 	const u32 *green_lut;
@@ -656,6 +669,26 @@ static void xisp_hdrmg_set_lut_entries(struct xisp_dev *xisp,
 			lut_offset[i] += 4;
 		}
 	}
+}
+
+/**
+ * xisp_set_lut3d_entries - Sets 3D LUT entries for the xisp device
+ * @xisp: Pointer to the xisp device structure
+ * @lut3d_offset: Base address offset for the 3D LUT in the device
+ * @lut3d: Pointer to the array containing 3D LUT entries
+ *
+ * This function writes 3D Look-Up Table (LUT) entries to the xisp device's memory.
+ * It iterates over the 3D LUT entries and writes each entry to the device memory
+ * starting from the specified base offset.
+ */
+
+static void xisp_set_lut3d_entries(struct xisp_dev *xisp, const u32 lut3d_offset,
+				   const u32 *lut3d)
+{
+	int i;
+
+	for (i = 0; i < XISP_LUT3D_SIZE; i++)
+		xvip_write(&xisp->xvip, lut3d_offset, lut3d[i]);
 }
 
 /**
@@ -1143,6 +1176,15 @@ static int xisp_s_ctrl(struct v4l2_ctrl *ctrl)
 							 XISP_UPPER_WORD_LSB),
 							 xisp->block_rows)) |
 							 xisp->block_cols);
+		break;
+	case V4L2_CID_XILINX_ISP_3DLUT_EN:
+		xisp->module_bypass = xisp_module_bypass(xisp->module_bypass,
+							 XISP_LUT3D_INDEX, ctrl->val);
+		xvip_write(&xisp->xvip, XISP_FUNCS_BYPASS_CONFIG_REG, xisp->module_bypass);
+		break;
+	case V4L2_CID_XILINX_ISP_3DLUT_DIM:
+		xisp->lut3d_dim = ctrl->val;
+		XISP_SET_CFG(XISP_LUT3D_INDEX, XISP_LUT3D_CONFIG_REG, xisp->lut3d_dim);
 		break;
 	default:
 		return -EINVAL;
@@ -1656,6 +1698,32 @@ static struct v4l2_ctrl_config xisp_ctrls_ltm[] = {
 	},
 };
 
+static struct v4l2_ctrl_config xisp_ctrls_lut3d[] = {
+	/* 3DLUT ENABLE/DISABLE */
+	{
+		.ops = &xisp_ctrl_ops,
+		.id = V4L2_CID_XILINX_ISP_3DLUT_EN,
+		.name = "bypass_3dlut",
+		.type = V4L2_CTRL_TYPE_BOOLEAN,
+		.min = XISP_MIN_VALUE,
+		.max = 1,
+		.step = 1,
+		.def = 0,
+		.flags = V4L2_CTRL_FLAG_SLIDER,
+	},
+	{
+		.ops = &xisp_ctrl_ops,
+		.id = V4L2_CID_XILINX_ISP_3DLUT_DIM,
+		.name = "3dlut_dim",
+		.type = V4L2_CTRL_TYPE_INTEGER,
+		.min = XISP_MIN_VALUE,
+		.max = XISP_3DLUT_DIM_MAX,
+		.step = 1,
+		.def = XISP_3DLUT_DIM_DEFALUT,
+		.flags = V4L2_CTRL_FLAG_SLIDER,
+	},
+};
+
 static struct v4l2_ctrl_config xisp_ctrls[] = {
 	/* Red Gain*/
 	{
@@ -1795,6 +1863,11 @@ static int xisp_s_stream(struct v4l2_subdev *subdev, int enable)
 						       XISP_RGBIR_CONFIG_BASE_5_LSB,
 						       XISP_RGBIR_CONFIG_BASE_5_SIZE);
 			}
+		if (XGET_BIT(XISP_LUT3D_INDEX, xisp->module_en))
+			if (!XGET_BIT(XISP_LUT3D_INDEX, xisp->module_bypass_en) ||
+			    !(XGET_BIT(XISP_LUT3D_INDEX, xisp->module_bypass_en) &
+			    XGET_BIT(XISP_LUT3D_INDEX, xisp->module_bypass)))
+				xisp_set_lut3d_entries(xisp, XISP_LUT3D_CONFIG_BASE, xisp->lut3d);
 	}
 
 	/* Start ISP pipeline IP */
@@ -2211,6 +2284,7 @@ static int xisp_probe(struct platform_device *pdev)
 		num_of_parameters += ARRAY_SIZE(xisp_ctrls_tm);
 		num_of_parameters += ARRAY_SIZE(xisp_ctrls_gtm);
 		num_of_parameters += ARRAY_SIZE(xisp_ctrls_ltm);
+		num_of_parameters += ARRAY_SIZE(xisp_ctrls_lut3d);
 
 		v4l2_ctrl_handler_init(&xisp->ctrl_handler, num_of_parameters);
 
@@ -2298,6 +2372,9 @@ static int xisp_probe(struct platform_device *pdev)
 				}
 			}
 		}
+
+		xisp_create_controls(xisp, XISP_LUT3D_INDEX,
+				     xisp_ctrls_lut3d, ARRAY_SIZE(xisp_ctrls_lut3d));
 	} else {
 		v4l2_ctrl_handler_init(&xisp->ctrl_handler, ARRAY_SIZE(xisp_ctrls) +
 				       ARRAY_SIZE(xisp_ctrls_gamma_correct));
